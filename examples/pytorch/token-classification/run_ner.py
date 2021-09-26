@@ -47,7 +47,7 @@ from transformers.utils.versions import require_version
 
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
-check_min_version("4.9.0.dev0")
+check_min_version("4.11.0.dev0")
 
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/token-classification/requirements.txt")
 
@@ -122,6 +122,13 @@ class DataTrainingArguments:
     preprocessing_num_workers: Optional[int] = field(
         default=None,
         metadata={"help": "The number of processes to use for the preprocessing."},
+    )
+    max_seq_length: int = field(
+        default=None,
+        metadata={
+            "help": "The maximum total input sequence length after tokenization. If set, sequences longer "
+            "than this will be truncated, sequences shorter will be padded."
+        },
     )
     pad_to_max_length: bool = field(
         default=False,
@@ -358,6 +365,7 @@ def main():
             examples[text_column_name],
             padding=padding,
             truncation=True,
+            max_length=data_args.max_seq_length,
             # We use this argument because the texts in our dataset are lists of words (with a label for each word).
             is_split_into_words=True,
         )
@@ -534,17 +542,19 @@ def main():
                 for prediction in true_predictions:
                     writer.write(" ".join(prediction) + "\n")
 
-    if training_args.push_to_hub:
-        kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "token-classification"}
-        if data_args.dataset_name is not None:
-            kwargs["dataset_tags"] = data_args.dataset_name
-            if data_args.dataset_config_name is not None:
-                kwargs["dataset_args"] = data_args.dataset_config_name
-                kwargs["dataset"] = f"{data_args.dataset_name} {data_args.dataset_config_name}"
-            else:
-                kwargs["dataset"] = data_args.dataset_name
+    kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "token-classification"}
+    if data_args.dataset_name is not None:
+        kwargs["dataset_tags"] = data_args.dataset_name
+        if data_args.dataset_config_name is not None:
+            kwargs["dataset_args"] = data_args.dataset_config_name
+            kwargs["dataset"] = f"{data_args.dataset_name} {data_args.dataset_config_name}"
+        else:
+            kwargs["dataset"] = data_args.dataset_name
 
+    if training_args.push_to_hub:
         trainer.push_to_hub(**kwargs)
+    else:
+        trainer.create_model_card(**kwargs)
 
 
 def _mp_fn(index):
